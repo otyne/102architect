@@ -1,0 +1,145 @@
+#!/usr/bin/env php
+<?php
+function print_usage()
+{
+  $usage = "USAGE\n\t./102architect x y transfo1 arg11 [arg12] [transfo2 arg12 [arg22]] ...\n";
+  $usage .= "\nDESCRIPTION\n\tx\tabscissaof the original point\n\t";
+  $usage .= "y\tordinate of the original point\n\n\t";
+  $usage .= "transfo arg1 [arg2]\n\t";
+  $usage .= "-t i j\ttranslation along vector (i, j)\n\t";
+  $usage .= "-z m n\tscaling by factors m (x-axis) and n (y-axis)\n\t";
+  $usage .= "-r d\trotation centered in O by a d degree angle\n\t";
+  $usage .= "-s d\treflection over the axis passing through O with an inclination angle of d degrees\n";
+  echo $usage;
+}
+
+function print_mat($argv, $mat)
+{
+  printf("%.2f\t%.2f\t%.2f\n", $mat[2], $mat[3], $mat[4]);
+  printf("%.2f\t%.2f\t%.2f\n", $mat[5], $mat[6], $mat[7]);
+  printf("%.2f\t%.2f\t%.2f\n", $mat[8], $mat[9], $mat[10]);
+  printf("(%d, %d) => (%.2f, %.2f)\n", $argv[1], $argv[2], $mat[0], $mat[1]);
+}
+
+function matrix_product($tmp, $mat)
+{
+  $res = array(0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+  $res[0] = $mat[0];
+  $res[1] = $mat[1];
+  $res[2] = $tmp[0] * $mat[2] + $tmp[1] * $mat[5] + $tmp[2] * $mat[8];
+  $res[3] = $tmp[0] * $mat[3] + $tmp[1] * $mat[6] + $tmp[2] * $mat[9];
+  $res[4] = $tmp[0] * $mat[4] + $tmp[1] * $mat[7] + $tmp[2] * $mat[10];
+  $res[5] = $tmp[3] * $mat[2] + $tmp[4] * $mat[5] + $tmp[5] * $mat[8];
+  $res[6] = $tmp[3] * $mat[3] + $tmp[4] * $mat[6] + $tmp[5] * $mat[9];
+  $res[7] = $tmp[3] * $mat[4] + $tmp[4] * $mat[7] + $tmp[5] * $mat[10];
+  $res[8] = $tmp[6] * $mat[2] + $tmp[7] * $mat[5] + $tmp[8] * $mat[8];
+  $res[9] = $tmp[6] * $mat[3] + $tmp[7] * $mat[6] + $tmp[8] * $mat[9];
+  $res[10] = $tmp[6] * $mat[4] + $tmp[7] * $mat[7] + $tmp[8] * $mat[10];
+  return $res;
+}
+
+function matrix_vector($mat)
+{
+  $stock = $mat[0];
+
+  $mat[0] = $mat[2] * $stock + $mat[3] * $mat[1] + $mat[4];
+  $mat[1] = $mat[5] * $stock + $mat[6] * $mat[1] + $mat[7];
+  return $mat;
+}
+
+function translation($argv, $x, $mat)
+{
+  $tmp = array(1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+  printf("Translation along vector (%d, %d)\n", $argv[$x + 1], $argv[$x + 2]);
+  $tmp[2] += $argv[$x + 1];
+  $tmp[5] += $argv[$x + 2];
+  $mat = matrix_product($tmp, $mat);
+  return $mat;
+}
+
+function scaling($argv, $x, $mat)
+{
+  $tmp = array(1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+  printf("Scaling by factors %d and %d\n", $argv[$x + 1], $argv[$x + 2]);
+  $tmp[0] *= $argv[$x + 1];
+  $tmp[4] *= $argv[$x + 2];
+  $mat = matrix_product($tmp, $mat);
+  return $mat;
+}
+
+function rotation($argv, $x, $mat)
+{
+  $tmp = array(1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+  printf("Rotation by a %d degree angle\n", $argv[$x + 1]);
+  $tmp[0] = cos($argv[$x + 1] / 180 * pi());
+  $tmp[1] = sin($argv[$x + 1] / 180 * pi()) * -1;
+  $tmp[3] = sin($argv[$x + 1] / 180 * pi());
+  $tmp[4] = cos($argv[$x + 1] / 180 * pi());
+  $mat = matrix_product($tmp, $mat);
+  return $mat;
+}
+
+function reflection($argv, $x, $mat)
+{ 
+  $tmp = array(1, 0, 0, 0, 1, 0, 0, 0, 1);
+
+  printf("Reflection over an axis with an inclination angle of %d degrees\n", $argv[$x + 1]);
+  $tmp[0] = cos(2 * $argv[$x + 1] / 180 * pi());
+  $tmp[1] = sin(2 * $argv[$x + 1] / 180 * pi());
+  $tmp[3] = sin(2 * $argv[$x + 1] / 180 * pi());
+  $tmp[4] = cos(2 * $argv[$x + 1] / 180 * pi()) * -1;
+  $mat = matrix_product($tmp, $mat);
+  return $mat;
+}
+
+function get_opt($argc, $argv, $x)
+{
+  $opt = array("-t", "-z", "-r", "-s");
+  
+  for ($k = 0; $k != 4; $k++) {
+    if (strcmp($argv[$x], $opt[$k]) == 0)
+      return ($k);
+  }
+  return (-1);
+}
+
+function architect($argc, $argv)
+{
+  $mat = array(0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1);
+  $fct = array("translation", "scaling", "rotation", "reflection");
+  $x = 3;
+
+  $mat[0] = $argv[1];
+  $mat[1] = $argv[2];
+  while ($x < $argc) {
+    $k = get_opt($argc, $argv, $x);
+    if ($k >= 0)
+      $mat = $fct[$k]($argv, $x, $mat);
+    if ($k == 0 || $k == 1)
+      $x += 3;
+    else
+      $x += 2;
+  }
+  $mat = matrix_vector($mat);
+  print_mat($argv, $mat);
+}
+
+function index($argc, $argv)
+{
+  if ($argc < 5) {
+    if ($argv[1] == "-h")
+    print_usage();
+    return 84;
+  }
+  if (!is_numeric($argv[1]) || !is_numeric($argv[2]) || !is_numeric($argv[4]))
+    return 84;
+  else
+    architect($argc, $argv);
+}
+
+index($argc, $argv);
+?>
